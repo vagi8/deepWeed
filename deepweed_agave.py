@@ -36,11 +36,11 @@ if device_name != '/device:GPU:0':
 print('Found GPU at: {}'.format(device_name))
 
 path=''
-model_path='VGG16'
+model_path=path+'VGG16'
 model_weights_path=model_path+'_model.h5'
 model_json_path=model_path+'_model.json'
-confusion_matrix_path=path+'_confusion_matrix.png'
-classification_report_path=path+'_classification_report.csv'
+confusion_matrix_path=model_path+'_confusion_matrix.png'
+classification_report_path=model_path+'_classification_report.txt'
 dataset_pickle_file = 'weed_train_array.pkl'
 
 
@@ -328,20 +328,8 @@ all_labels_list=y_val
 all_preds_list=y_pred
 plot_confusion_matrix(cm=confusion_matrix(y_true=all_labels_list, y_pred=all_preds_list), target_names=specices, normalize=False)
 
-def classification_report_csv(report):
-    report_data = []
-    lines = report.split('\n')
-    for line in lines[2:-3]:
-        row = {}
-        row_data = line.split('      ')
-        row['class'] = row_data[0]
-        row['precision'] = float(row_data[1])
-        row['recall'] = float(row_data[2])
-        row['f1_score'] = float(row_data[3])
-        row['support'] = float(row_data[4])
-        report_data.append(row)
-    dataframe = pd.DataFrame.from_dict(report_data)
-    dataframe.to_csv(classification_report_path, index = False)
+def classification_report_txt(report):
+    with open(classification_report_path, 'w') as f:
+        f.write(report)
 
-report = classification_report(y_val, y_pred, target_names=specices)
-classification_report_csv(report)
+classification_report_txt(classification_report(y_val, y_pred, target_names=specices))
