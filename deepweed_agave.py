@@ -5,6 +5,7 @@ Created on Monday Nov 1 21:08:10 2021
 
 @author: Mankala Vageeshan
 """
+import cv2
 import sys, os
 import pickle
 import numpy as np
@@ -20,7 +21,7 @@ from keras.models import Sequential,model_from_json
 from keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.metrics import BinaryAccuracy, Precision,Recall,AUC
 from tensorflow.keras.callbacks import ReduceLROnPlateau, ModelCheckpoint, EarlyStopping
-from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications import VGG16,ResNet50,InceptionV3
 import tensorflow as tf
 from PIL.Image import Image as PilImage
 from sklearn.metrics import confusion_matrix, classification_report
@@ -35,13 +36,24 @@ if device_name != '/device:GPU:0':
   raise SystemError('GPU device not found')
 print('Found GPU at: {}'.format(device_name))
 
+#static arguments for training
+image_mode = 'grey' # 'normal', 'grey'
+model_name = 'vgg16' #'vgg16', 'resnet50'
+
 path=''
-model_path=path+'VGG16'
+dataset_pickle_file = 'weed_train_array.pkl'
+if model_name == 'vgg16':
+    model_path=path+'VGG16'
+elif model_name == 'resnet50':
+    model_path=path+'ResNet50'
+elif model_name == 'inceptionv3':
+    model_path=path+'InceptionV3'
+
+#defining the model paths
 model_weights_path=model_path+'_model.h5'
 model_json_path=model_path+'_model.json'
 confusion_matrix_path=model_path+'_confusion_matrix.png'
 classification_report_path=model_path+'_classification_report.txt'
-dataset_pickle_file = 'weed_train_array.pkl'
 
 
 #loading the dataset    
@@ -58,12 +70,16 @@ else:
 combined_data=np.array(data)
 X = []
 y = []
-specices=[]
-for features,label,specice in combined_data:
+unique_y=[]
+unique_label=[]
+for features,label,species_name in combined_data:
+    if image_mode=='grey':
+      features = cv2.cvtColor(features, cv2.COLOR_RGB2GRAY)
     X.append(features)
     y.append(label)
-    if specice not in specices:
-      specices.append(specice)
+    if label not in unique_y:
+      unique_label.append(species_name)
+      unique_y.append(label)
 
 # reshape X data to make valid 4D data with numpy
 X = np.array(X).reshape(-1, 64, 64, 3)
@@ -88,10 +104,6 @@ def display_images(
         print("No images to display.")
         return 
 
-    # if len(images) > max_images:
-    #     print(f"Showing {max_images} images of {len(images)}:")
-    #     images=images[0:max_images]
-
     height = max(height, int(len(images)/columns) * height)
     plt.figure(figsize=(width, height))
     for i, image in enumerate(images):
@@ -99,21 +111,6 @@ def display_images(
         plt.subplot(int(len(images) / columns + 1), columns, i + 1)
         plt.imshow(image)
         plt.title(labels[i])
-        # if hasattr(image, 'filename'):
-        #     title=image.filename
-        #     if title.endswith("/"): title = title[0:-1]
-        #     title=os.path.basename(title)
-        #     title=textwrap.wrap(title, label_wrap_length)
-        #     title="\n".join(title)
-        #     plt.title(title, fontsize=label_font_size);
-
-# display_images(images,dog_breed)
-# img = X[y.index(118)]
-# display_images([img],['boston_bull'])
-
-# unique_label=list(unique_label)
-# for i in range(len(y)):
-#   y[i]=unique_label.index(y[i])
 
 print("Splitting train & test")
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
@@ -128,8 +125,15 @@ print(f"X Validation : {X_val.shape}")
 print(f"Y Validation : {len(y_val)}")
 
 
-#loading vgg16 as base model
-base_model = VGG16(input_shape=(64,64,3),include_top=False,weights="imagenet")
+if model_name == 'vgg16':
+    #loading vgg16 as base model
+    base_model = VGG16(input_shape=(64,64,3),include_top=False,weights="imagenet")
+elif model_name == 'resnet50':
+    #loading resnet50 as base model
+    base_model = tf.keras.applications.ResNet50(input_shape=(64,64,3),include_top=False,weights="imagenet")
+elif model_name == 'inceptionv3':
+    #loading inceptionv3 as base model
+    base_model = InceptionV3(input_shape=(64,64,3),include_top=False,weights="imagenet")
 
 # Freezing base model Layers 
 for layer in base_model.layers:
@@ -237,31 +241,6 @@ def train_Validation_plot(acc,val_acc,loss,val_loss,auc,val_auc,precision,val_pr
 train_Validation_plot(history.history['accuracy'],history.history['val_accuracy'],history.history['loss'],history.history['val_loss'],history.history['auc'],history.history['val_auc'],history.history['precision'],history.history['val_precision'],history.history['f1_score'],history.history['val_f1_score'])
 final_model=model
 
-# saved_model_config_path = '/content/drive/MyDrive/2021-11-02 07:22:18.859958VGG16_model.json'
-# saved_model_weights_path = '/content/drive/MyDrive/2021-11-02 06:54:54.906552VGG16_model.h5'
-# json_file = open(saved_model_config_path, 'r')
-# loaded_model_json = json_file.read()
-# json_file.close()
-
-# loaded_model = model_from_json(loaded_model_json)
-# # load weights into new model
-# loaded_model.load_weights(saved_model_weights_path)
-# print("Loaded model from disk")
-  
-# # evaluate loaded model on test data
-# loaded_model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-# # score = loaded_model.evaluate(X, np.array(y), verbose=0)
-# # print("%s: %.2f%%" % (loaded_model.metrics_names[1], score[1]*100))
-# final_model=loaded_model
-
-# test_img_path= '/content/drive/MyDrive/0a7899ed6a15f4af8f28e01c9c44dcfe.jpg'
-# img = cv2.imread(test_img_path,cv2.IMREAD_COLOR)
-# img_sized = cv2.resize(img, (128, 128), interpolation=cv2.INTER_LINEAR)
-# Xnew = np.array(img_sized).reshape(-1,128, 128, 3)
-# ynew = final_model.predict(Xnew)
-# pred=ynew.tolist()
-# unique_label[pred[0].index(max(pred[0]))]
-
 unique_label=list(unique_label)
 y_pred=[]
 i=0
@@ -326,10 +305,10 @@ print(len(y_pred))
 
 all_labels_list=y_val
 all_preds_list=y_pred
-plot_confusion_matrix(cm=confusion_matrix(y_true=all_labels_list, y_pred=all_preds_list), target_names=specices, normalize=False)
+plot_confusion_matrix(cm=confusion_matrix(y_true=all_labels_list, y_pred=all_preds_list), target_names=unique_label, normalize=False)
 
 def classification_report_txt(report):
     with open(classification_report_path, 'w') as f:
         f.write(report)
 
-classification_report_txt(classification_report(y_val, y_pred, target_names=specices))
+classification_report_txt(classification_report(y_val, y_pred, target_names=unique_label))
