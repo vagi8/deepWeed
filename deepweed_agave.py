@@ -37,8 +37,9 @@ if device_name != '/device:GPU:0':
 print('Found GPU at: {}'.format(device_name))
 
 #static arguments for training
-image_mode = 'grey' # 'normal', 'grey'
+image_mode = 'normal' # 'normal', 'grey'
 model_name = 'vgg16' #'vgg16', 'resnet50'
+no_epochs = 500
 
 path=''
 dataset_pickle_file = 'weed_train_array.pkl'
@@ -81,19 +82,15 @@ for features,label,species_name in combined_data:
       unique_label.append(species_name)
       unique_y.append(label)
 
-# reshape X data to make valid 4D data with numpy
-X = np.array(X).reshape(-1, 64, 64, 3)
+def image_reshape(image,image_mode):
+    # reshape X data to make valid 4D data with numpy
+    if image_mode=='grey':
+        img = np.array(image).reshape(-1, 64, 64)
+    else:
+        img = np.array(image).reshape(-1, 64, 64,3)
+    return img
 
-#creating a Map for labels
-unique_label=set(y)
-
-# dog_breed=['great_pyrenees','kuvasz','american_staffordshire_terrier','welsh_springer_spaniel','curly-coated_retriever','irish_water_spaniel','brittany_spaniel','miniature_pinscher','siberian_husky','silky_terrier','soft-coated_wheaten_terrier','staffordshire_bullterrier','standard_poodle','standard_schnauzer','sussex_spaniel','tibetan_mastiff','tibetan_terrier','toy_poodle','scottish_deerhound','maltese_dog']
-# len(dog_breed)
-# images=[]
-# for i in dog_breed:
-#   images.append(X[y.index(i)])
-
-
+X = image_reshape(X,image_mode)
 
 def display_images(
     images: [PilImage], labels,
@@ -130,7 +127,7 @@ if model_name == 'vgg16':
     base_model = VGG16(input_shape=(64,64,3),include_top=False,weights="imagenet")
 elif model_name == 'resnet50':
     #loading resnet50 as base model
-    base_model = tf.keras.applications.ResNet50(input_shape=(64,64,3),include_top=False,weights="imagenet")
+    base_model = ResNet50(input_shape=(64,64,3),include_top=False,weights="imagenet")
 elif model_name == 'inceptionv3':
     #loading inceptionv3 as base model
     base_model = InceptionV3(input_shape=(64,64,3),include_top=False,weights="imagenet")
@@ -176,7 +173,7 @@ early_stopping = EarlyStopping(verbose=1, patience=5)
 model.compile(optimizer='Adam', loss='binary_crossentropy',metrics=METRICS)
 
 # Training
-history=model.fit(X_train, y_train,validation_data=(X_test, y_test),verbose = 1,epochs = 3,callbacks=[reducelr_plateau,model_checkpoint,early_stopping])
+history=model.fit(X_train, y_train,validation_data=(X_test, y_test),verbose = 1,epochs = no_epochs,callbacks=[reducelr_plateau,model_checkpoint,early_stopping])
 
 # serialize model architecture to JSON
 model_json = model.to_json()
@@ -241,14 +238,13 @@ def train_Validation_plot(acc,val_acc,loss,val_loss,auc,val_auc,precision,val_pr
 train_Validation_plot(history.history['accuracy'],history.history['val_accuracy'],history.history['loss'],history.history['val_loss'],history.history['auc'],history.history['val_auc'],history.history['precision'],history.history['val_precision'],history.history['f1_score'],history.history['val_f1_score'])
 final_model=model
 
-unique_label=list(unique_label)
 y_pred=[]
 i=0
 for img in X_val:
-  img = np.array(img).reshape(-1,64, 64, 3)
+  img = image_reshape(img,image_mode)
   ynew = final_model.predict(img)
   pred = ynew.tolist()
-  temp=unique_label[pred[0].index(max(pred[0]))]
+  temp=unique_y[pred[0].index(max(pred[0]))]
   print(f"{i} = {temp}")
   y_pred.append(temp)
   i+=1
@@ -303,12 +299,11 @@ def plot_confusion_matrix(cm,
 print(type(y_val))
 print(len(y_pred))
 
-all_labels_list=y_val
-all_preds_list=y_pred
-plot_confusion_matrix(cm=confusion_matrix(y_true=all_labels_list, y_pred=all_preds_list), target_names=unique_label, normalize=False)
+plot_confusion_matrix(cm=confusion_matrix(y_true=y_val, y_pred=y_pred), target_names=unique_label, normalize=False)
 
 def classification_report_txt(report):
     with open(classification_report_path, 'w') as f:
         f.write(report)
 
-classification_report_txt(classification_report(y_val, y_pred, target_names=unique_label))
+report = classification_report(y_val, y_pred, target_names=unique_label)
+classification_report_txt(report)
