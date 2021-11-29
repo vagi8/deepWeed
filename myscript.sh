@@ -5,7 +5,7 @@
 #SBATCH -t 0-01:00:00   # time in d-hh:mm:ss
 #SBATCH -p publicgpu    # partition
 #SBATCH -q wildfire     # QOS
-#SBATCH --gres=gpu:4    # Request two GPUs
+#SBATCH --gres=gpu:2    # Request two GPUs
 #SBATCH -o slurm.%j.out # file to save job's STDOUT (%j = JobId)
 #SBATCH -e slurm.%j.err # file to save job's STDERR (%j = JobId)
 #SBATCH --mail-type=ALL # Send an e-mail when a job starts, stops, or fails
