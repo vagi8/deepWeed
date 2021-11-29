@@ -30,101 +30,65 @@ import pandas as pd
 
 print("Module import successfull")
 
-#getting the tf GPU 
-device_name = tf.test.gpu_device_name()
-if device_name != '/device:GPU:0':
-  raise SystemError('GPU device not found')
-print('Found GPU at: {}'.format(device_name))
-
-#static arguments for training
-image_mode = 'normal' # 'normal', 'grey'
-# model_name = 'vgg16' #'vgg16', 'resnet50', 'inceptionv3'
-no_epochs = 500
-
-path=''
-dataset_pickle_file = 'weed_train_array.pkl'
-model_weights_path=''
-model_json_path=''
-confusion_matrix_path=''
-classification_report_path=''
 def define_paths(model_name):
-    if model_name == 'vgg16':
-        model_path=path+'VGG16'
-    elif model_name == 'resnet50':
-        model_path=path+'ResNet50'
-    elif model_name == 'inceptionv3':
-        model_path=path+'InceptionV3'
+        if model_name == 'vgg16':
+            model_path=path+'VGG16'
+        elif model_name == 'resnet50':
+            model_path=path+'ResNet50'
+        elif model_name == 'inceptionv3':
+            model_path=path+'InceptionV3'
 
-    #defining the model paths
-    model_weights_path=model_path+'_model.h5'
-    model_json_path=model_path+'_model.json'
-    confusion_matrix_path=model_path+'_confusion_matrix.png'
-    classification_report_path=model_path+'_classification_report.txt'
-    return model_weights_path,model_json_path,confusion_matrix_path,classification_report_path
+        #defining the model paths
+        model_weights_path=model_path+'_model.h5'
+        model_json_path=model_path+'_model.json'
+        confusion_matrix_path=model_path+'_confusion_matrix.png'
+        classification_report_path=model_path+'_classification_report.txt'
+        return model_weights_path,model_json_path,confusion_matrix_path,classification_report_path
 
-#loading the dataset    
-if os.path.exists(path+dataset_pickle_file):
-    print("Loading data from pickle file")
-    with open(path+dataset_pickle_file, 'rb') as f:
-        data = pickle.load(f)
-    print("Data loaded")
-else:
-    print("File Doesn't exits")
-    sys.exit()
-
-
-combined_data=np.array(data)
-X = []
-y = []
-unique_y=[]
-unique_label=[]
-for features,label,species_name in combined_data:
-    if image_mode=='grey':
-      features = cv2.cvtColor(features, cv2.COLOR_RGB2GRAY)
-    X.append(features)
-    y.append(label)
-    if label not in unique_y:
-      unique_label.append(species_name)
-      unique_y.append(label)
-
-def image_reshape(image,image_mode):
+def image_greyscale_reshape(image,image_mode,a,b):
     # reshape X data to make valid 4D data with numpy
     if image_mode=='grey':
-        img = np.array(image).reshape(-1, 64, 64)
+        return np.array(image).reshape(-1, a, b)
     else:
-        img = np.array(image).reshape(-1, 64, 64,3)
-    return img
+        return np.array(image).reshape(-1, a, b, 3)
 
-X = image_reshape(X,image_mode)
+def image_reshape(image,model_name,image_mode):
+    # reshape X data to make valid 4D data with numpy
+    if model_name=='inceptionv3':
+        return image_greyscale_reshape(image,image_mode,75,75)
+    else:
+        return image_greyscale_reshape(image,image_mode,64,64)
 
-def display_images(
-    images: [PilImage], labels,
-    columns=5, width=20, height=8, max_images=15, 
-    label_wrap_length=50, label_font_size=8):
+def generate_data(combined_data,image_mode,model_name):
+    X = []
+    y = []
+    unique_y=[]
+    unique_label=[]
+    for features,label,species_name in combined_data:
+        if image_mode=='grey':
+            features = cv2.cvtColor(features, cv2.COLOR_RGB2GRAY)
+        if model_name == 'inceptionv3':
+            features = cv2.resize(features, (75,75), interpolation=cv2.INTER_NEAREST)
+        X.append(features)
+        y.append(label)
+        if label not in unique_y:
+            unique_label.append(species_name)
+        unique_y.append(label)
+    
+    X = image_reshape(X,image_mode)
 
-    if not images:
-        print("No images to display.")
-        return 
-
-    height = max(height, int(len(images)/columns) * height)
-    plt.figure(figsize=(width, height))
-    for i, image in enumerate(images):
-
-        plt.subplot(int(len(images) / columns + 1), columns, i + 1)
-        plt.imshow(image)
-        plt.title(labels[i])
-
-print("Splitting train & test")
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.30, random_state=42)
-y_train = to_categorical(y_train)
-y_test = to_categorical(y_test)
-print(f"X Train : {X_train.shape}")
-print(f"Y Train : {y_train.shape}")
-print(f"X Test : {X_test.shape}")
-print(f"Y Test : {y_test.shape}")
-print(f"X Validation : {X_val.shape}")
-print(f"Y Validation : {len(y_val)}")
+    print("Splitting train & test")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.30, random_state=42)
+    y_train = to_categorical(y_train)
+    y_test = to_categorical(y_test)
+    print(f"X Train : {X_train.shape}")
+    print(f"Y Train : {y_train.shape}")
+    print(f"X Test : {X_test.shape}")
+    print(f"Y Test : {y_test.shape}")
+    print(f"X Validation : {X_val.shape}")
+    print(f"Y Validation : {len(y_val)}")
+    return X_train, X_test, y_train, y_test, X_val, y_val, unique_label, unique_y
 
 def run_model(model_name):
     print("model_name - ", model_name)
@@ -305,7 +269,7 @@ def run_model(model_name):
         plt.tight_layout()
         plt.ylabel('True label')
         plt.xlabel('Predicted label\naccuracy={:0.4f}; misclass={:0.4f}'.format(accuracy, misclass))
-        plt.savefig(confusion_matrix_path)
+        plt.savefig(confusion_matrix_path,dpi=300, bbox_inches = "tight")
 
     print(type(y_val))
     print(len(y_pred))
@@ -319,5 +283,39 @@ def run_model(model_name):
     report = classification_report(y_val, y_pred, target_names=unique_label)
     classification_report_txt(report)
 
-for model_name in ['vgg16', 'resnet50', 'inceptionv3']:
-    run_model(model_name)
+if __name__ == "__main__":
+    #getting the tf GPU 
+    device_name = tf.test.gpu_device_name()
+    if device_name != '/device:GPU:0':
+        raise SystemError('GPU device not found')
+    print('Found GPU at: {}'.format(device_name))
+
+    #static arguments for training
+    image_mode = 'normal' # 'normal', 'grey'
+    # model_name = 'vgg16' #'vgg16', 'resnet50', 'inceptionv3'
+    no_epochs = 500
+
+    path='../storage/'
+    dataset_pickle_file = 'weed_train_array.pkl'
+    model_weights_path=''
+    model_json_path=''
+    confusion_matrix_path=''
+    classification_report_path=''
+    
+    #loading the dataset    
+    if os.path.exists(path+dataset_pickle_file):
+        print("Loading data from pickle file")
+        with open(path+dataset_pickle_file, 'rb') as f:
+            data = pickle.load(f)
+        print("Data loaded")
+    else:
+        print("File Doesn't exits")
+        sys.exit()
+    combined_data=np.array(data)
+    
+    X_train, X_test, y_train, y_test, X_val, y_val, unique_label, unique_y = generate_data(combined_data,image_mode,'')
+
+    for model_name in ['vgg16','resnet50', 'inceptionv3']:
+        if model_name == 'inceptionv3':
+            X_train, X_test, y_train, y_test, X_val, y_val, unique_label, unique_y = generate_data(combined_data,image_mode,model_name)
+        run_model(model_name)
